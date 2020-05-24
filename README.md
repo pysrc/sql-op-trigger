@@ -20,7 +20,7 @@ CREATE TABLE `my_table` (
 
 config.json
 
-```yml
+```json
 {
 	"Ip": "192.168.137.4",
 	"Port": "3306",
