@@ -1,0 +1,9 @@
+{
+	"Ip": "192.168.137.4",
+	"Port": "3306",
+	"User": "root",
+	"Password": "root",
+	"Database": "my_test",
+	"HisSuffix": "his",
+	"Tables": ["my_table"]
+}
