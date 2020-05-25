@@ -28,6 +28,7 @@ type TemplateArgs struct {
 	HisSuffix string  // 操作记录表后缀
 	FromTable Table   // 来源表
 	HisTable  Table   // 历史表
+	UpdField  []Field // 历史表修改字段
 	AddField  []Field // 历史表新增字段
 	DelField  []Field // 历史表删除字段
 }
@@ -53,6 +54,9 @@ CREATE TABLE {{.FromTable.Name}}_{{.HisSuffix}} (
   PRIMARY KEY (` + "`{{.HisSuffix}}_id`" + `)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4;
 `
+
+// 历史表修改字段
+var HisUpdFiled = `{{UpdFiled .}}`
 
 // 历史表新增字段
 var HisAddFiled = `{{AddFiled .}}`
@@ -116,6 +120,15 @@ func FromFields(args []Field) string {
 	return strings.Join(temp, ",\n") + ","
 }
 
+// 修改字段
+func UpdFiled(args TemplateArgs) string {
+	var res = ""
+	for _, v := range args.UpdField {
+		res += "ALTER TABLE " + args.FromTable.Name + "_" + args.HisSuffix + " MODIFY COLUMN `" + v.Name + "` " + v.Type + ";\n"
+	}
+	return res
+}
+
 // 添加字段
 func AddFiled(args TemplateArgs) string {
 	var res = ""
@@ -134,6 +147,32 @@ func DelFiled(args TemplateArgs) string {
 	return res
 }
 
+// 修改的字段
+func UpdateSub(src *Table, dst *Table) []Field {
+	if src == nil {
+		return nil
+	}
+	if dst == nil {
+		return src.Fields
+	}
+	// 判断是否存在修改
+	var has = func(k Field) bool {
+		for _, s := range dst.Fields {
+			if s.Name == k.Name && s.Type != k.Type {
+				return true
+			}
+		}
+		return false
+	}
+	var res []Field
+	for _, s := range src.Fields {
+		if has(s) {
+			res = append(res, s)
+		}
+	}
+	return res
+}
+
 // 找出src表中存在而dst表不存在的字段
 func Sub(src *Table, dst *Table) []Field {
 	if src == nil {
@@ -145,7 +184,7 @@ func Sub(src *Table, dst *Table) []Field {
 	// 判断是否存在
 	var has = func(k Field) bool {
 		for _, s := range dst.Fields {
-			if s.Name == k.Name && s.Type == k.Type {
+			if s.Name == k.Name {
 				return true
 			}
 		}
@@ -209,6 +248,7 @@ func main() {
 	}
 	tpl := template.New("main")
 	tpl.Funcs(template.FuncMap{"Column": Column})
+	tpl.Funcs(template.FuncMap{"UpdFiled": UpdFiled})
 	tpl.Funcs(template.FuncMap{"AddFiled": AddFiled})
 	tpl.Funcs(template.FuncMap{"DelFiled": DelFiled})
 	tpl.Funcs(template.FuncMap{"FromFields": FromFields})
@@ -229,6 +269,14 @@ func main() {
 			tab.Execute(out, args)
 		} else {
 			args.HisTable = *hisTable
+			// 历史表修改字段处理
+			var upd = UpdateSub(fromTable, hisTable)
+			args.UpdField = upd
+			upf, err := tpl.Parse(HisUpdFiled)
+			if err != nil {
+				return
+			}
+			upf.Execute(out, args)
 			// 排除历史表固定字段，将历史表存在而基础表不存在的字段删除
 			var del = Sub(hisTable, fromTable)
 			if del != nil {
