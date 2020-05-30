@@ -200,17 +200,28 @@ func Sub(src *Table, dst *Table) []Field {
 }
 
 func main() {
-	var conf string
-	var outconfig bool
+	var conf string    // 配置文件
+	var outconfig bool // 打印配置文件模板
+	var out io.Writer  // 输出流
+	var outfile string // 输出文件
 	flag.StringVar(&conf, "c", "config.json", "Config file path.")
-	flag.BoolVar(&outconfig, "gc", false, "Print config template")
+	flag.BoolVar(&outconfig, "gc", false, "Print config template.")
+	flag.StringVar(&outfile, "o", "", "Output file.")
 	flag.Parse()
+	if outfile == "" {
+		out = os.Stdout
+	} else {
+		file, err := os.Create(outfile)
+		if err != nil {
+			return
+		}
+		defer file.Close()
+		out = file
+	}
 	if outconfig {
-		fmt.Println(ConfigTemplate)
+		out.Write([]byte(ConfigTemplate))
 		return
 	}
-	var out io.Writer
-	out = os.Stdout
 	f, err := ioutil.ReadFile(conf)
 	if err != nil {
 		return
@@ -253,7 +264,7 @@ func main() {
 	tpl.Funcs(template.FuncMap{"DelFiled": DelFiled})
 	tpl.Funcs(template.FuncMap{"FromFields": FromFields})
 	for _, table := range config.Tables {
-		fmt.Println("\n-- " + table)
+		out.Write([]byte("\n-- " + table + "\n"))
 		var fromTable = getTable(table, config.Database)                     // 原始表
 		var hisTable = getTable(table+"_"+config.HisSuffix, config.Database) // 历史记录表
 		var args TemplateArgs
@@ -341,5 +352,7 @@ func main() {
 		}
 		det.Execute(out, args)
 	}
-	fmt.Scanf("\n")
+	if outfile == "" {
+		fmt.Scanf("\n")
+	}
 }
