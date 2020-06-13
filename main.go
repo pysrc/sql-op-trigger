@@ -103,6 +103,9 @@ const ConfigTemplate = `
 }
 `
 
+// 是否开启大小写敏感 true(不敏感)/false(敏感)
+var lowerCase = false
+
 func Column(prefix string, args []Field) string {
 	var temp []string
 	for _, v := range args {
@@ -238,6 +241,24 @@ func main() {
 	defer con.Close()
 	if err != nil {
 		return
+	}
+
+	// 查看是否大小写敏感
+	rows, err := con.Query("show Variables like 'lower_case_table_names'")
+	if err != nil {
+		return
+	}
+	for rows.Next() {
+		var mis string
+		rows.Scan(&mis, &lowerCase)
+		break
+	}
+	rows.Close()
+	if lowerCase {
+		// 不开启大小写敏感，表名小写处理
+		for i, v := range config.Tables {
+			config.Tables[i] = strings.ToLower(v)
+		}
 	}
 	var getTable = func(tb string, db string) *Table {
 		var temp *Table
