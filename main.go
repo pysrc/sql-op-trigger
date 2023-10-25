@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 	"text/template"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // 数据库配置
@@ -21,7 +21,8 @@ type Config struct {
 	Password  string
 	Database  string
 	HisSuffix string
-	Tables    []string
+	Tables    []string            // 表名称
+	Fixed     map[string][]string // 固定表、列，不设置就是所有列
 }
 
 type TemplateArgs struct {
@@ -99,7 +100,10 @@ const ConfigTemplate = `
 	"Password": "root",
 	"Database": "mydatabase",
 	"HisSuffix": "his",
-	"Tables": ["hello", "test"]
+	"Tables": ["hello", "test"],
+	"Fixed": {
+		"test": ["_id", "_name"]
+	}
 }
 `
 
@@ -202,6 +206,15 @@ func Sub(src *Table, dst *Table) []Field {
 	return res
 }
 
+func containsElement(list []string, target string) bool {
+	for _, item := range list {
+		if strings.EqualFold(item, target) {
+			return true
+		}
+	}
+	return false
+}
+
 func main() {
 	var conf string    // 配置文件
 	var outconfig bool // 打印配置文件模板
@@ -225,7 +238,7 @@ func main() {
 		out.Write([]byte(ConfigTemplate))
 		return
 	}
-	f, err := ioutil.ReadFile(conf)
+	f, err := os.ReadFile(conf)
 	if err != nil {
 		return
 	}
@@ -238,7 +251,9 @@ func main() {
 
 	var host = config.User + ":" + config.Password + "@tcp(" + config.Ip + ":" + config.Port + ")/" + config.Database + "?charset=utf8"
 	con, err := sql.Open("mysql", host)
-	defer con.Close()
+	defer func() {
+		_ = con.Close()
+	}()
 	if err != nil {
 		return
 	}
@@ -261,6 +276,8 @@ func main() {
 		}
 	}
 	var getTable = func(tb string, db string) *Table {
+		fixed, ok := config.Fixed[tb]
+
 		var temp *Table
 		rows, err := con.Query("select c.COLUMN_NAME, c.COLUMN_KEY, c.COLUMN_TYPE from information_schema.COLUMNS c where c.TABLE_NAME = ? and c.TABLE_SCHEMA = ?", tb, db)
 		if err != nil {
@@ -274,7 +291,13 @@ func main() {
 			}
 			var field Field
 			rows.Scan(&field.Name, &field.Key, &field.Type)
-			temp.Fields = append(temp.Fields, field)
+			if ok {
+				if containsElement(fixed, field.Name) {
+					temp.Fields = append(temp.Fields, field)
+				}
+			} else {
+				temp.Fields = append(temp.Fields, field)
+			}
 		}
 		return temp
 	}

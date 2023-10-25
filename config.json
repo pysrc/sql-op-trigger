@@ -1,9 +1,12 @@
 {
-	"Ip": "192.168.137.4",
+	"Ip": "127.0.0.1",
 	"Port": "3306",
 	"User": "root",
 	"Password": "root",
-	"Database": "my_test",
+	"Database": "mydatabase",
 	"HisSuffix": "his",
-	"Tables": ["my_table"]
+	"Tables": ["hello", "test"],
+	"Fixed": {
+		"hello": ["_id", "_name"]
+	}
 }
